@@ -15,6 +15,9 @@ ifdef([AM_PROG_AR], [AM_PROG_AR], [])
 AC_CHECK_HEADERS([linux/nvme_ioctl.h], [AC_DEFINE_UNQUOTED(HAVE_NVME, 1, [Found NVMe])], [], [])
 AC_CHECK_HEADERS([byteswap.h], [], [], [])
 
+# Check for sg_cmds_basic.h
+AC_CHECK_HEADER([scsi/sg_cmds_basic.h], [], [AC_MSG_ERROR([sg_cmds_basic.h not found])])
+
 # AC_PROG_LIBTOOL
 
 AC_ARG_ENABLE([nvme-supp],

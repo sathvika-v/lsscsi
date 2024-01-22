@@ -3258,6 +3258,17 @@ tag_lun(const uint8_t * lunp, int * tag_arr)
         }
 }
 
+// Function to fetch firmware information for a SCSI device
+static void fetchFirmwareInfo(int device_fd, char* firmware) {
+    char inquiry_data[4096];
+    memset(inquiry_data, '\0', sizeof(inquiry_data));
+
+    if (0 == sg_ll_inquiry(device_fd, 0, 0, 0, inquiry_data, sizeof(inquiry_data), 1, 0)) {
+        // Extract firmware information from the inquiry data
+        memcpy(firmware, &inquiry_data[32], 4);
+    }
+}
+
 /* List one SCSI device (LU) on a line. */
 static void
 one_sdev_entry(const char * dir_name, const char * devname,
@@ -3316,50 +3327,6 @@ one_sdev_entry(const char * dir_name, const char * devname,
 
         if (op->wwn)
                 get_wwn = true;
-        if (op->transport_info) {
-                if (transport_tport(devname, op, vlen, value))
-                        printf("%-30s  ", value);
-                else
-                        printf("                                ");
-        } else if (op->unit) {
-                get_lu_name(devname, value, vlen, op->unit > 3);
-                n = strlen(value);
-                if (n < 1)      /* left justified "none" means no lu name */
-                        printf("%-32s  ", "none");
-                else if (1 == op->unit) {
-                        if (n < 33)
-                                printf("%-32s  ", value);
-                        else {
-                                value[32] = '_';
-                                value[33] = ' ';
-                                value[34] = '\0';
-                                printf("%-34s", value);
-                        }
-                } else if (2 == op->unit) {
-                        if (n < 33)
-                                printf("%-32s  ", value);
-                        else {
-                                value[n - 32] = '_';
-                                printf("%-32s  ", value + n - 32);
-                        }
-                } else     /* -uuu, output in full, append rest of line */
-                        printf("%-s  ", value);
-        } else if (! op->brief) {
-                if (get_value(buff, "vendor", value, vlen))
-                        printf("%-8s ", value);
-                else
-                        printf("vendor?  ");
-
-                if (get_value(buff, "model", value, vlen))
-                        printf("%-16s ", value);
-                else
-                        printf("model?           ");
-
-                if (get_value(buff, "rev", value, vlen))
-                        printf("%-4s  ", value);
-                else
-                        printf("rev?  ");
-        }
 
         if (1 == non_sg_scan(buff, op)) {
                 if (DT_DIR == non_sg.d_type) {
@@ -3429,6 +3396,15 @@ one_sdev_entry(const char * dir_name, const char * devname,
                         printf("%-9s", "-");
         }
 
+        char dev[LMAX_NAME] = "";
+        if (if_directory_ch2generic(buff)) {
+                if (NULL == getcwd(wd, sizeof(wd)))
+                        printf("  generic_dev error");
+                else {
+                        get_dev_node(wd, dev, CHR_DEV);
+                }
+        }
+
         if (op->generic) {
                 if (if_directory_ch2generic(buff)) {
                         if (NULL == getcwd(wd, sizeof(wd)))
@@ -3456,6 +3432,54 @@ one_sdev_entry(const char * dir_name, const char * devname,
                 }
                 else
                         printf("  %-9s", "-");
+        }
+
+        if (op->transport_info) {
+                if (transport_tport(devname, op, vlen, value))
+                        printf("%-30s  ", value);
+                else
+                        printf("                                ");
+        } else if (op->unit) {
+                get_lu_name(devname, value, vlen, op->unit > 3);
+                n = strlen(value);
+                if (n < 1)      /* left justified "none" means no lu name */
+                        printf("%-32s  ", "none");
+                else if (1 == op->unit) {
+                        if (n < 33)
+                                printf("%-32s  ", value);
+                        else {
+                                value[32] = '_';
+                                value[33] = ' ';
+                                value[34] = '\0';
+                                printf("%-34s", value);
+                        }
+                } else if (2 == op->unit) {
+                        if (n < 33)
+                                printf("%-32s  ", value);
+                        else {
+                                value[n - 32] = '_';
+                                printf("%-32s  ", value + n - 32);
+                        }
+                } else     /* -uuu, output in full, append rest of line */
+                        printf("%-s  ", value);
+        } else if (! op->brief) {
+                if (get_value(buff, "vendor", value, vlen))
+                        printf("%-8s ", value);
+                else
+                        printf("vendor?  ");
+
+                if (get_value(buff, "model", value, vlen))
+                        printf("%-16s ", value);
+                else
+                        printf("model?           ");
+		
+		char fw[32];
+		int device_fd = -1;
+		device_fd = open(dev, 0);
+		if (device_fd < 0)
+			printf("device_fd open failed\n");
+		fetchFirmwareInfo(device_fd, fw);
+		printf("%-4s ", fw);
         }
 
         if (op->protection) {
